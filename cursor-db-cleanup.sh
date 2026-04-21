@@ -129,8 +129,8 @@ for c in composers:
     else:
         ids_to_keep.add(cid)
 
-print(f"-- Conversations to delete: {len(ids_to_delete)} (2025 and older)", file=sys.stderr)
-print(f"-- Conversations to keep:   {len(ids_to_keep)} (2026)", file=sys.stderr)
+print(f"-- Conversations to delete: {len(ids_to_delete)} (before $CUTOFF_DISPLAY)", file=sys.stderr)
+print(f"-- Conversations to keep:   {len(ids_to_keep)} (on or after $CUTOFF_DISPLAY)", file=sys.stderr)
 
 # Build the updated headers JSON (only 2026 conversations)
 kept = [c for c in composers if c.get("composerId", "") in ids_to_keep]
@@ -220,14 +220,14 @@ with open("$TMPDIR/headers.json") as f:
     data = json.loads(f.read().strip())
 
 composers = data.get("allComposers", [])
-ids_2025 = set()
-ids_2026 = set()
+ids_before = set()
+ids_after = set()
 for c in composers:
     cid = c.get("composerId", "")
     if c.get("createdAt", 0) < cutoff:
-        ids_2025.add(cid)
+        ids_before.add(cid)
     else:
-        ids_2026.add(cid)
+        ids_after.add(cid)
 
 conn = sqlite3.connect(db_path)
 cur = conn.cursor()
@@ -253,10 +253,10 @@ for prefix in prefixes:
         vlen = vlen or 0
         rest = key[len(prefix):]
         cid = rest.split(":")[0]
-        if cid in ids_2025:
+        if cid in ids_before:
             match_r += 1
             match_b += vlen
-        elif cid not in ids_2026:
+        elif cid not in ids_after:
             orph_r += 1
             orph_b += vlen
     delete_rows += match_r
@@ -292,9 +292,9 @@ file_size = os.path.getsize(db_path)
 print(f"\n  Current DB size:                {file_size/1048576:>10.1f} MB")
 print(f"  Data to remove:                 {total_reclaim/1048576:>10.1f} MB")
 print(f"  Estimated size after cleanup:   {(file_size - total_reclaim)/1048576:>10.1f} MB")
-print(f"\n  Conversations kept (2026):      {len(ids_2026):>10,}")
-print(f"  Conversations removed (<=2025): {len(ids_2025):>10,}")
-print(f"  Orphaned entries removed:       {orphan_rows:>10,}")
+print(f"\n  Conversations kept (>= $CUTOFF_DISPLAY):  {len(ids_after):>10,}")
+print(f"  Conversations removed (< $CUTOFF_DISPLAY): {len(ids_before):>10,}")
+print(f"  Orphaned entries removed:              {orphan_rows:>10,}")
 
 conn.close()
 PYEOF
